@@ -64,8 +64,16 @@ async def chat_ai(request: Request):
 
                 elif event["event"] == "on_tool_end":
                     run_id = event["run_id"]
-                    output = event["data"].get("output")
-                    yield f"data: {json.dumps({'event': 'on_tool_end', 'run_id': run_id, 'data': {'output': output}})}\n\n"
+                    output_msg = event["data"].get("output")
+                    if hasattr(output_msg, "content"):
+                        output_content = output_msg.content
+                    else:
+                        output_content = str(output_msg)
+                    if isinstance(output_content, (dict, list, str, int, float, bool, type(None))):
+                        pass
+                    else:
+                        output_content = str(output_content)
+                    yield f"data: {json.dumps({'event': 'on_tool_end', 'run_id': run_id, 'data': {'output': output_content}})}\n\n"
 
                 elif event["event"] == "on_tool_error":
                     run_id = event["run_id"]

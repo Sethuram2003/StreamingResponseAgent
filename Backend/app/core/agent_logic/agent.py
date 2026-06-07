@@ -7,12 +7,21 @@ from app.core.agent_logic.prompt import SYSTEM_PROMPT
 
 async def chat_agent() -> str:
 
-    llm = ChatOllama(model="llama3.1:8b")
+    llm = ChatOllama(model="minimax-m2.1:cloud")
     
-    client = MultiServerMCPClient()   
+    client = MultiServerMCPClient(
+        {
+            "partnumber_search": {
+                "command": "python3",
+                "args": ["/Users/sethuramgauthamr/Documents/Projects/AgenticGenerativeUI/PartNumberMCP/main.py"],
+                "transport": "stdio"
+            }
+        }
+    )
+
          
     tools = await client.get_tools()
-    
+
     checkpointer = InMemorySaver()
 
     agent = create_agent(

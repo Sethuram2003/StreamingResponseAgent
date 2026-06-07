@@ -1,13 +1,86 @@
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@import "tailwindcss";
+
+.msg-content {
+  word-break: break-word;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+.ai-msg h1,
+.ai-msg h2,
+.ai-msg h3,
+.ai-msg h4,
+.ai-msg h5,
+.ai-msg h6 {
+  margin: 0.75em 0 0.4em;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.ai-msg h1 { font-size: 1.6em; }
+.ai-msg h2 { font-size: 1.4em; }
+.ai-msg h3 { font-size: 1.2em; }
+
+.ai-msg p {
+  margin: 0.5em 0;
+}
+
+.ai-msg ul,
+.ai-msg ol {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+
+.ai-msg li {
+  margin-bottom: 0.2em;
+}
+
+.ai-msg table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75em 0;
+  font-size: 0.85em;
+}
+
+.ai-msg th,
+.ai-msg td {
+  border: 1px solid #d1d5db;
+  padding: 0.4em 0.6em;
+  text-align: left;
+}
+
+.ai-msg th {
+  background-color: #f3f4f6;
+  font-weight: 600;
+}
+
+.ai-msg a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.ai-msg strong {
+  font-weight: 700;
+}
+
+.ai-msg code {
+  background: #e5e7eb;
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.9em;
+}
+
+.ai-msg pre {
+  background: #1f2937;
+  color: #f9fafb;
+  padding: 1em;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+
+.ai-msg blockquote {
+  border-left: 4px solid #d1d5db;
+  padding-left: 1em;
+  color: #6b7280;
+  margin: 0.5em 0;
 }
