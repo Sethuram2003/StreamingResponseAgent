@@ -2,37 +2,165 @@ import { useChatStream } from './hooks/useChatStream';
 import { ChatMessage } from './components/ChatMessage';
 import { ChatInput } from './components/ChatInput';
 import { Sidebar } from './components/Sidebar';
-import { useRef, useState, useCallback } from 'react';
+import { Header } from './components/Header';
+import { ToolCallCard } from './components/ToolCallCard';
+import { TypingIndicator } from './components/TypingIndicator';
+import { WelcomeScreen } from './components/WelcomeScreen';
+import { ScrollToBottom } from './components/ScrollToBottom';
+import { AnimatedBackground } from './components/AnimatedBackground';
+import { useEffect, useRef, useState, useCallback } from 'react';
+
+const THEME_KEY = 'sra-theme';
+const SESSION_KEY = 'sra-session-id';
 
 function App() {
-  const [sessionId, setSessionId] = useState<string>(`session-${Date.now()}`);
-  const { messages, sendMessage, isStreaming } = useChatStream(sessionId);
+  // Theme
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved) return saved === 'dark';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDark);
+    localStorage.setItem(THEME_KEY, isDark ? 'dark' : 'light');
+  }, [isDark]);
+
+  const toggleTheme = useCallback(() => setIsDark(d => !d), []);
+
+  // Session
+  const [sessionId, setSessionId] = useState<string>(
+    () => localStorage.getItem(SESSION_KEY) ?? `session-${Date.now()}`
+  );
+
+  useEffect(() => {
+    localStorage.setItem(SESSION_KEY, sessionId);
+  }, [sessionId]);
+
+  const { messages, sendMessage, isStreaming, stop, clear } = useChatStream(sessionId);
 
   const handleNewChat = useCallback(() => {
-    // Trigger new session by generating a fresh ID
+    clear();
     setSessionId(`session-${Date.now()}`);
-    // Clear messages – the hook must support resetting messages,
-    // so we’ll need to expose a reset function from the hook.
-    // For now, just reload the page (or we can extend the hook).
-    window.location.reload();
+  }, [clear]);
+
+  const handleClearChat = useCallback(() => {
+    if (messages.length === 0) return;
+    if (window.confirm('Clear this conversation?')) {
+      clear();
+    }
+  }, [clear, messages.length]);
+
+  // Auto-scroll to bottom on new content while streaming or new messages
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const stickToBottom = useRef(true);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+      stickToBottom.current = distance < 100;
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
   }, []);
 
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (stickToBottom.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [messages, isStreaming]);
+
+  // Build a lookup so we know which AI message is currently streaming
+  const lastMsg = messages[messages.length - 1];
+  const lastIsStreamingAi =
+    isStreaming && lastMsg && lastMsg.role === 'ai';
+
   return (
-    <div className="h-screen flex">
-      <Sidebar sessionId={sessionId} onNewChat={handleNewChat} />
-      <div className="flex-1 flex flex-col">
-        <h1 className="text-xl font-bold p-4 border-b">AI Chat with Tool Calls</h1>
-        <div className="flex-1 overflow-y-auto p-4 space-y-2">
-          {messages.map(msg => (
-            <ChatMessage key={msg.id} message={msg} />
-          ))}
-          {isStreaming && (
-            <div className="self-start text-sm text-gray-400 italic">
-              AI is typing...
+    <div className="relative h-screen flex bg-[var(--color-bg)] text-[var(--color-text)] overflow-hidden">
+      <AnimatedBackground />
+
+      {/* App shell */}
+      <div className="relative z-10 flex w-full h-full">
+        <Sidebar
+          sessionId={sessionId}
+          onNewChat={handleNewChat}
+          onSwitchSession={id => setSessionId(id)}
+        />
+
+        <main className="flex-1 flex flex-col min-w-0">
+          <Header
+            sessionId={sessionId}
+            isStreaming={isStreaming}
+            isDark={isDark}
+            onToggleTheme={toggleTheme}
+            onClearChat={handleClearChat}
+            messageCount={messages.filter(m => m.role !== 'tool_call').length}
+          />
+
+          {/* Messages area */}
+          <div className="relative flex-1 min-h-0">
+            <div
+              ref={scrollRef}
+              className="absolute inset-0 overflow-y-auto thin-scroll"
+            >
+              {messages.length === 0 ? (
+                <WelcomeScreen
+                  onPrompt={text => {
+                    sendMessage(text);
+                  }}
+                />
+              ) : (
+                <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+                  {messages.map((msg, i) => {
+                    const isLast = i === messages.length - 1;
+                    if (msg.role === 'tool_call' && msg.toolCall) {
+                      // Align tool cards to the left (AI side) with a slight indent
+                      return (
+                        <div key={msg.id} className="pl-0 sm:pl-12 animate-fade-in-up">
+                          <ToolCallCard toolCall={msg.toolCall} />
+                        </div>
+                      );
+                    }
+                    return (
+                      <ChatMessage
+                        key={msg.id}
+                        message={msg}
+                        isStreaming={lastIsStreamingAi && isLast}
+                      />
+                    );
+                  })}
+
+                  {isStreaming && !lastIsStreamingAi && (
+                    <div className="flex items-end gap-3 animate-fade-in">
+                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-cyan-400 flex items-center justify-center shadow-[var(--shadow-soft)] animate-gradient">
+                        <svg viewBox="0 0 24 24" className="w-5 h-5 text-white" fill="currentColor">
+                          <path d="M12 2 L14 9 L21 11 L14 13 L12 20 L10 13 L3 11 L10 9 Z" />
+                        </svg>
+                      </div>
+                      <div className="px-4 py-3 rounded-2xl rounded-bl-md bg-[var(--color-bg-elev)] border border-[var(--color-border)] shadow-[var(--shadow-soft)]">
+                        <TypingIndicator />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          )}
-        </div>
-        <ChatInput onSend={sendMessage} disabled={isStreaming} />
+
+            <ScrollToBottom scrollRef={scrollRef} />
+          </div>
+
+          <ChatInput
+            onSend={sendMessage}
+            onStop={stop}
+            disabled={isStreaming}
+            isStreaming={isStreaming}
+          />
+        </main>
       </div>
     </div>
   );

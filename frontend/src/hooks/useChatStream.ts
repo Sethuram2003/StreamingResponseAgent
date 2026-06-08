@@ -1,10 +1,28 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { streamChat } from '../api/chat';
 import type { ChatMessage, ToolCallData } from '../types';
 
 export function useChatStream(sessionId: string) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
+
+  // Track the active reader so we can cancel mid-stream
+  const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
+  // Track the active AI message id so we can append tool messages correctly
+  const aiMsgIdRef = useRef<string | null>(null);
+
+  const stop = useCallback(() => {
+    if (readerRef.current) {
+      try { readerRef.current.cancel(); } catch { /* noop */ }
+      readerRef.current = null;
+    }
+    setIsStreaming(false);
+  }, []);
+
+  const clear = useCallback(() => {
+    stop();
+    setMessages([]);
+  }, [stop]);
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -20,6 +38,7 @@ export function useChatStream(sessionId: string) {
 
       // Prepare AI placeholder
       const aiMsgId = crypto.randomUUID();
+      aiMsgIdRef.current = aiMsgId;
       const aiMsg: ChatMessage = { id: aiMsgId, role: 'ai', content: '' };
       setMessages(prev => [...prev, aiMsg]);
 
@@ -30,6 +49,7 @@ export function useChatStream(sessionId: string) {
         const reader = await streamChat(sessionId, [
           { role: 'human', content },
         ]);
+        readerRef.current = reader;
 
         const decoder = new TextDecoder();
         let buffer = '';
@@ -137,20 +157,25 @@ export function useChatStream(sessionId: string) {
           }
         }
       } catch (error) {
-        console.error('Stream error:', error);
-        setMessages(prev =>
-          prev.map(m =>
-            m.id === aiMsgId
-              ? { ...m, content: `Error: ${(error as Error).message}` }
-              : m
-          )
-        );
+        // Ignore the "aborted" error thrown by reader.cancel()
+        if ((error as Error)?.name !== 'AbortError') {
+          console.error('Stream error:', error);
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === aiMsgId
+                ? { ...m, content: m.content ? `${m.content}\n\n*Error: ${(error as Error).message}*` : `Error: ${(error as Error).message}` }
+                : m
+            )
+          );
+        }
       } finally {
+        readerRef.current = null;
+        aiMsgIdRef.current = null;
         setIsStreaming(false);
       }
     },
     [sessionId]
   );
 
-  return { messages, sendMessage, isStreaming };
+  return { messages, sendMessage, isStreaming, stop, clear };
 }

@@ -7,7 +7,7 @@ from app.core.agent_logic.prompt import SYSTEM_PROMPT
 
 async def chat_agent() -> str:
 
-    llm = ChatOllama(model="minimax-m2.1:cloud")
+    llm = ChatOllama(model="gemma4:12b")
     
     client = MultiServerMCPClient(
         {
