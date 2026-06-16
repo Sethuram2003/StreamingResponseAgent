@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI
 
-from app.core.agent_logic.agent_service import get_agent, stop_agent
+from app.core.agent_logic.agent_service import get_agent, stop_agents
 from app.api.chat import router as chat
 from app.api.healthcheck import router as healthcheck
 
@@ -15,7 +15,8 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     
-    await get_agent()
+    await get_agent("single")
+    await get_agent("deep")
 
     logger.info("Agent startup completed")
 
@@ -23,7 +24,7 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    await stop_agent()
+    await stop_agents()
     
     logger.info("Agent shutdown completed")
 

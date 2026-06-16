@@ -1,15 +1,25 @@
 import { useState, useRef, useEffect, type FormEvent, type KeyboardEvent } from 'react';
+import type { AgentType } from '../types';
 
 interface Props {
   onSend: (message: string) => void;
   onStop?: () => void;
   disabled: boolean;
   isStreaming?: boolean;
+  agentType?: AgentType;
+  onAgentTypeChange?: (type: AgentType) => void;
 }
 
 const MAX_LENGTH = 4000;
 
-export function ChatInput({ onSend, onStop, disabled, isStreaming }: Props) {
+export function ChatInput({
+  onSend,
+  onStop,
+  disabled,
+  isStreaming,
+  agentType = 'single',
+  onAgentTypeChange,
+}: Props) {
   const [input, setInput] = useState('');
   const [focused, setFocused] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -51,6 +61,21 @@ export function ChatInput({ onSend, onStop, disabled, isStreaming }: Props) {
             : 'border-[var(--color-border)] shadow-[var(--shadow-soft)]'
         }`}
       >
+        {/* Agent mode selector */}
+        <div className="shrink-0 flex flex-col justify-end pb-1">
+          <label htmlFor="agent-mode" className="sr-only">Agent mode</label>
+          <select
+            id="agent-mode"
+            value={agentType}
+            onChange={e => onAgentTypeChange?.(e.target.value as AgentType)}
+            disabled={isStreaming}
+            className="h-9 px-2.5 text-xs font-medium rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-soft)] text-[var(--color-text)] focus:outline-none focus:border-[var(--color-brand)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          >
+            <option value="single">Single agent</option>
+            <option value="deep">Deep agents</option>
+          </select>
+        </div>
+
         {/* Textarea */}
         <div className="flex-1 relative">
           <textarea
@@ -60,7 +85,7 @@ export function ChatInput({ onSend, onStop, disabled, isStreaming }: Props) {
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
             onKeyDown={handleKeyDown}
-            placeholder={isStreaming ? 'AI is responding… (press Stop to interrupt)' : 'Message the agent…'}
+            placeholder={isStreaming ? 'AI is responding… (press Stop to interrupt)' : `Message the ${agentType === 'deep' ? 'deep agent team' : 'agent'}…`}
             disabled={disabled}
             rows={1}
             className="w-full resize-none bg-transparent px-3 py-2.5 text-sm sm:text-[0.95rem] text-[var(--color-text)] placeholder:text-[var(--color-text-faint)] focus:outline-none disabled:opacity-60 max-h-[200px] thin-scroll"

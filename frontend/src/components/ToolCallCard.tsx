@@ -53,6 +53,16 @@ function StatusIcon({ status }: { status: ToolCallData['status'] }) {
   );
 }
 
+function formatJson(value: unknown): string {
+  if (value === undefined) return '';
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
 export function ToolCallCard({ toolCall }: { toolCall: ToolCallData }) {
   const [expanded, setExpanded] = useState(toolCall.status !== 'started');
   const style = STATUS_STYLES[toolCall.status];
@@ -116,8 +126,8 @@ export function ToolCallCard({ toolCall }: { toolCall: ToolCallData }) {
                   </svg>
                   Input
                 </div>
-                <pre className="bg-[var(--color-bg-elev)] border border-[var(--color-border)] p-2 rounded-lg max-h-32 overflow-auto text-[11px] font-mono">
-                  {JSON.stringify(toolCall.input, null, 2)}
+                <pre className="bg-[var(--color-bg-elev)] border border-[var(--color-border)] p-2 rounded-lg max-h-32 overflow-auto text-[11px] font-mono leading-relaxed">
+                  {formatJson(toolCall.input)}
                 </pre>
               </div>
             )}
@@ -130,10 +140,8 @@ export function ToolCallCard({ toolCall }: { toolCall: ToolCallData }) {
                   </svg>
                   Output
                 </div>
-                <pre className="bg-[var(--color-bg-elev)] border border-[var(--color-border)] p-2 rounded-lg max-h-32 overflow-auto text-[11px] font-mono">
-                  {typeof toolCall.output === 'string'
-                    ? toolCall.output
-                    : JSON.stringify(toolCall.output, null, 2)}
+                <pre className="bg-[var(--color-bg-elev)] border border-[var(--color-border)] p-2 rounded-lg max-h-32 overflow-auto text-[11px] font-mono leading-relaxed">
+                  {formatJson(toolCall.output)}
                 </pre>
               </div>
             )}

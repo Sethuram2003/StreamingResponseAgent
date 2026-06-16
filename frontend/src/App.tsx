@@ -4,14 +4,17 @@ import { ChatInput } from './components/ChatInput';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { ToolCallCard } from './components/ToolCallCard';
+import { SubAgentCard } from './components/SubAgentCard';
 import { TypingIndicator } from './components/TypingIndicator';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { ScrollToBottom } from './components/ScrollToBottom';
 import { AnimatedBackground } from './components/AnimatedBackground';
 import { useEffect, useRef, useState, useCallback } from 'react';
+import type { AgentType } from './types';
 
 const THEME_KEY = 'sra-theme';
 const SESSION_KEY = 'sra-session-id';
+const AGENT_KEY = 'sra-agent-type';
 
 function App() {
   // Theme
@@ -38,7 +41,21 @@ function App() {
     localStorage.setItem(SESSION_KEY, sessionId);
   }, [sessionId]);
 
-  const { messages, sendMessage, isStreaming, stop, clear } = useChatStream(sessionId);
+  // Agent mode (single / deep)
+  const [agentType, setAgentType] = useState<AgentType>(() => {
+    if (typeof window === 'undefined') return 'single';
+    const saved = localStorage.getItem(AGENT_KEY);
+    return saved === 'deep' ? 'deep' : 'single';
+  });
+
+  useEffect(() => {
+    localStorage.setItem(AGENT_KEY, agentType);
+  }, [agentType]);
+
+  const { messages, sendMessage, isStreaming, stop, clear } = useChatStream({
+    sessionId,
+    agentType,
+  });
 
   const handleNewChat = useCallback(() => {
     clear();
@@ -99,7 +116,7 @@ function App() {
             isDark={isDark}
             onToggleTheme={toggleTheme}
             onClearChat={handleClearChat}
-            messageCount={messages.filter(m => m.role !== 'tool_call').length}
+            messageCount={messages.filter(m => m.role !== 'tool_call' && m.role !== 'sub_agent').length}
           />
 
           {/* Messages area */}
@@ -123,6 +140,13 @@ function App() {
                       return (
                         <div key={msg.id} className="pl-0 sm:pl-12 animate-fade-in-up">
                           <ToolCallCard toolCall={msg.toolCall} />
+                        </div>
+                      );
+                    }
+                    if (msg.role === 'sub_agent' && msg.subAgent) {
+                      return (
+                        <div key={msg.id} className="pl-0 sm:pl-12 animate-fade-in-up">
+                          <SubAgentCard subAgent={msg.subAgent} />
                         </div>
                       );
                     }
@@ -159,6 +183,8 @@ function App() {
             onStop={stop}
             disabled={isStreaming}
             isStreaming={isStreaming}
+            agentType={agentType}
+            onAgentTypeChange={setAgentType}
           />
         </main>
       </div>
