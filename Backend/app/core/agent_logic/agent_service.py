@@ -1,5 +1,7 @@
 import asyncio
 import logging
+from dotenv import load_dotenv
+load_dotenv()
 
 from app.core.agent_logic.agent import chat_agent
 from app.core.agent_logic.deep_agent import deep_chat_agent

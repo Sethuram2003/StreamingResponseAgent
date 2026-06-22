@@ -4,6 +4,7 @@ from app.core.agent_logic.agent_service import get_agent
 import json
 import logging
 from langchain_core.messages import HumanMessage
+from headroom import compress
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -91,6 +92,15 @@ def _json_dumps(obj):
     return json.dumps(obj, cls=_SSEEncoder)
 
 
+def _get_dict_value(obj, key, default=None):
+    """Safely read a value from a dict or pydantic-like model."""
+    if obj is None:
+        return default
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return getattr(obj, key, default)
+
+
 @router.post("/")
 async def chat_ai(request: Request):
     """
@@ -123,7 +133,24 @@ async def chat_ai(request: Request):
         if msg.get("role") == "human":
             lc_messages.append(HumanMessage(content=msg.get("content", "")))
     if lc_messages:
-        lc_messages = [lc_messages[-1]]
+        lc_messages = [lc_messages[-1]]  # keep only the last human message
+
+    # FIX: Convert LangChain messages to OpenAI/Anthropic format dicts before compression
+    openai_messages = [
+        {"role": "user", "content": msg.content}
+        for msg in lc_messages
+    ]
+
+    result = compress(
+        messages=openai_messages,
+        model="gpt-4o",
+        compress_user_messages=True,   # ← required to touch human/user messages
+        target_ratio=0.5,              # ← compress to ~50% of original tokens
+    )
+    print(f"Saved {result.tokens_saved} tokens ({result.compression_ratio:.0%})")
+
+    # The compress function returns a CompressResult with .messages containing the compressed dicts
+    compressed_messages = result.messages
 
     config = {"configurable": {"thread_id": session_id}}
 
@@ -131,8 +158,9 @@ async def chat_ai(request: Request):
         try:
             agent = await get_agent(agent_type)
 
+            # Pass the compressed messages to the agent
             async for event in agent.astream_events(
-                {"messages": lc_messages},
+                {"messages": compressed_messages},
                 config=config,
                 version="v2"
             ):
@@ -147,30 +175,34 @@ async def chat_ai(request: Request):
                 parent_ids = event.get("parent_ids", [])
 
                 if kind == "on_chat_model_stream":
-                    chunk = data.get("chunk")
+                    chunk = _get_dict_value(data, "chunk")
                     chunk_content = getattr(chunk, "content", None) or ""
-                    done_marker = data.get("chunk", {}).get("done", False)
+                    done_marker = (
+                        _get_dict_value(chunk, "done", False)
+                        if isinstance(chunk, dict)
+                        else getattr(chunk, "done", False)
+                    )
                     if chunk_content or done_marker:
                         yield f"data: {_json_dumps({'event': 'on_chat_model_stream', 'run_id': run_id, 'parent_ids': parent_ids, 'data': {'chunk': {'content': chunk_content, 'done': done_marker}}})}\n\n"
 
                 elif kind == "on_tool_start":
-                    tool_input = data.get("input")
+                    tool_input = _get_dict_value(data, "input")
                     yield f"data: {_json_dumps({'event': 'on_tool_start', 'name': name, 'run_id': run_id, 'parent_ids': parent_ids, 'data': {'input': tool_input}})}\n\n"
 
                 elif kind == "on_tool_end":
-                    output_content = _serialize_output(data.get("output"))
+                    output_content = _serialize_output(_get_dict_value(data, "output"))
                     yield f"data: {_json_dumps({'event': 'on_tool_end', 'run_id': run_id, 'parent_ids': parent_ids, 'data': {'output': output_content}})}\n\n"
 
                 elif kind == "on_tool_error":
-                    error_msg = data.get("error", "Unknown tool error")
+                    error_msg = _get_dict_value(data, "error", "Unknown tool error")
                     yield f"data: {_json_dumps({'event': 'on_tool_error', 'run_id': run_id, 'parent_ids': parent_ids, 'data': {'error': error_msg}})}\n\n"
 
                 elif kind == "on_chain_start":
-                    input_data = _serialize_input(data.get("input"))
+                    input_data = _serialize_input(_get_dict_value(data, "input"))
                     yield f"data: {_json_dumps({'event': 'on_chain_start', 'name': name, 'run_id': run_id, 'parent_ids': parent_ids, 'data': {'input': input_data}})}\n\n"
 
                 elif kind == "on_chain_end":
-                    output_data = _serialize_output(data.get("output"))
+                    output_data = _serialize_output(_get_dict_value(data, "output"))
                     final_text = _extract_final_ai_text(output_data)
                     # Emit a synthetic model-stream event for the final AI text when the model
                     # produced it as part of a chain-end Command instead of token-by-token.
